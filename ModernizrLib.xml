@@ -1,4 +1,5 @@
 <Ui xmlns='http://www.blizzard.com/wow/ui/'>
   <Script file='libs\LibStub\LibStub.lua'/>
+  <Script file='libs\Sol\Sol.lua'/>
   <Script file='ModernizrLib.lua'/>
 </Ui>

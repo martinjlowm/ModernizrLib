@@ -1,0 +1,10 @@
+## Interface: 11200
+## Title: ModernizrLib
+## Notes: DEV: Library that supplies reimplementations of common functions from 2.0+
+## Author: martinjlowm
+## Version: 1.0
+
+libs\LibStub\LibStub.lua
+libs\Sol\Sol.lua
+
+ModernizrLib.lua
