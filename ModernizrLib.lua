@@ -43,6 +43,7 @@ local stringSplit = string.split
 local stringTrim = string.trim
 local tableGetn = table.getn
 local tableRemove = table.remove
+local tableInsert = table.insert
 local tableWipe = table.wipe
 local type = type
 
@@ -2565,7 +2566,7 @@ end
 
 IsStealthed = IsStealthed or
     function()
-        return tooltipScan(MODERNIZR.SetUnitBuff, 'player', 1, 'Stealth', 'Prowl')
+        return not not (UnitAura('player', 'Stealth') or UnitAura('player', 'Prowl'))
     end
 
 IsMounted = IsMounted or
@@ -2592,12 +2593,11 @@ local shapeshiftForms = {
 
 GetShapeshiftForm = GetShapeshiftForm or function()
     local numForms = GetNumShapeshiftForms()
-    local name, isActive, formIndex
     for i = 1, NUM_SHAPESHIFT_SLOTS do
         if i <= numForms then
-            _, name, isActive = GetShapeshiftFormInfo(i)
+            local _, name, isActive = GetShapeshiftFormInfo(i)
             name = name == 'Dire Bear Form' and 'Bear Form' or name
-            formIndex = shapeshiftForms[name]
+            local formIndex = shapeshiftForms[name]
             if formIndex and isActive then
                 return formIndex
             end
@@ -2608,27 +2608,7 @@ GetShapeshiftForm = GetShapeshiftForm or function()
 end
 
 
-function UnitHasAura(unit, aura)
-    local text
-    for i = 1, 30 do
-        MODERNIZR:SetUnitBuff(unit, i)
-
-        text = MODERNIZR:GetLine(1)
-
-        if text == aura then
-            return i
-        end
-
-        if not text then
-            return nil
-        end
-
-        MODERNIZR:Erase()
-    end
-end
-
-
-local processAuraChange, TargetAction, cacheAuras, unitHasAura
+local processAuraChange, TargetAction, cacheAuras
 do
     local playerName = UnitName('player')
     local buffExpires = { }
@@ -2674,136 +2654,6 @@ do
 
             func(action, onSelf)
         end
-    end
-
-    local unitAura = function(buffFunc, tooltipFunc, unit, index, rank, filter)
-        local name, icon, count, auraType, duration, expires, caster
-        if type(index) == 'string' then
-            name = index
-        end
-
-        local timeLeft
-        local now = GetTime()
-        local targetName = UnitName(unit)
-
-        MODERNIZR:Erase()
-        if name then
-            index = 0
-
-            local text
-            for i = 1, 30 do
-                tooltipFunc(MODERNIZR, unit, i)
-
-                text, auraType = MODERNIZR:GetLine(1)
-
-                if not text or text == name then
-                    index = i
-                    break
-                end
-
-                MODERNIZR:Erase()
-            end
-
-            name = text
-        else
-            if targetName == playerName then
-                local buffIndex = GetPlayerBuff(index - 1, filter)
-
-                if buffIndex > -1 then
-                    MODERNIZR:SetPlayerBuff(buffIndex)
-                    name = MODERNIZR:GetLine(1)
-                    count = GetPlayerBuffApplications(buffIndex)
-                    icon = GetPlayerBuffTexture(buffIndex)
-                    timeLeft = GetPlayerBuffTimeLeft(buffIndex)
-                    auraType = GetPlayerBuffDispelType(buffIndex)
-
-                    expires = now + timeLeft
-                end
-            else
-                tooltipFunc(MODERNIZR, unit, index)
-
-                name, auraType = MODERNIZR:GetLine(1)
-            end
-        end
-
-        if not name then
-            return
-        end
-
-        name = stringTrim(name)
-
-        expires = expires or buffExpires[targetName] and buffExpires[targetName][name] or 0
-
-        local _auraType
-        if not icon then
-            icon, count, _auraType = buffFunc(unit, index)
-        end
-
-        auraType = auraType or _auraType
-
-        count = count or 1
-
-        -- Some buffs have identical names but different duration, lookup by
-        -- icon and name instead
-        duration = staticBuffDurations[name]
-        if (not duration) and icon then
-            local pathParts = { stringSplit('\\', icon) }
-            duration = staticBuffDurations[stringFormat('%s|%s', stringLower(pathParts[3]), name)]
-        end
-
-        duration = expires > 0 and duration or timeLeft or 0
-
-        if not icon then
-            icon = spellIcons[name]
-            icon = icon and 'Interface/Icons/' .. icon
-        end
-
-        return name, rank, icon, count, auraType, duration, expires, caster
-    end
-
-
-    UnitAura = function(unit, index, rank, filter)
-        if type(index) == 'number' or not filter then
-            filter = rank
-        end
-
-        local name, icon, count, dispelType, duration, expires, caster
-
-        if filter == 'HARMFUL' then
-            name, rank, icon, count, dispelType, duration, expires, caster =
-                unitAura(UnitDebuff, MODERNIZR.SetUnitDebuff, unit, index, rank, filter)
-        else
-            name, rank, icon, count, dispelType, duration, expires, caster =
-                unitAura(UnitBuff, MODERNIZR.SetUnitBuff, unit, index, rank, filter)
-            if filter and stringMatch(filter, 'HARMFUL') and not name then
-                name, rank, icon, count, dispelType, duration, expires, caster =
-                    unitAura(UnitDebuff, MODERNIZR.SetUnitDebuff, unit, index, rank, filter)
-            end
-        end
-
-        return name, '', icon, count, dispelType, duration, expires, caster
-    end
-
-    MUnitBuff = function(unit, index, rank, filter)
-        if type(index) == 'number' or not filter then
-            filter = rank
-        end
-
-        local name, rank, icon, count, dispelType, duration, expires, caster =
-            unitAura(UnitBuff, MODERNIZR.SetUnitBuff, unit, index, rank, filter)
-
-        return name, '', icon, count, dispelType, duration, expires, caster
-    end
-
-    MUnitDebuff = function(unit, index, rank, filter)
-        if type(index) == 'number' or not filter then
-            filter = rank
-        end
-
-        local name, rank, icon, count, dispelType, duration, expires, caster =
-            unitAura(UnitDebuff, MODERNIZR.SetUnitDebuff, unit, index, rank, filter)
-
-        return name, '', rank, icon, count, dispelType, duration, expires, caster
     end
 
     processAuraChange = function(msg)
@@ -2968,13 +2818,7 @@ do
         auraCache[unit] = cache
     end
 
-    unitHasAura = function(unit, aura)
-        unit = UnitIsUnit(unit, 'player') and 'player' or unit
-
-        return auraCache[unit] and auraCache[unit].buffs[1]
-    end
-
-    unitAuraNew = function(unit, index, filter)
+    UnitAura = function(unit, index, filter)
         unit = UnitIsUnit(unit, 'player') and 'player' or unit
 
         local name
@@ -3028,21 +2872,9 @@ do
     end
 end
 
-
-
-function localtest()
-    local t = GetTime()
-
-    local a
-    for i = 1, (40 * 7) do
-        a = unitAuraNew('target', "Warchief's Blessing")
-    end
-
-    print(GetTime() - t)
-end
-
 local function cacheAurasProxy()
-    unit = event == 'PLAYER_AURAS_CHANGED' and 'player' or
+    unit = (event == 'PLAYER_ENTERING_WORLD' or
+                event == 'PLAYER_AURAS_CHANGED') and 'player' or
         event == 'PLAYER_TARGET_CHANGED' and 'target' or
         arg1
 
@@ -3055,6 +2887,7 @@ end
 
 local f = CreateFrame('Frame')
 f:SetScript('OnEvent', cacheAurasProxy)
+f:RegisterEvent('PLAYER_ENTERING_WORLD')
 f:RegisterEvent('UNIT_AURA')
 f:RegisterEvent('PLAYER_AURAS_CHANGED')
 f:RegisterEvent('PLAYER_TARGET_CHANGED')
@@ -3083,6 +2916,11 @@ local _CastSpellByName
 local _CastPetAction
 -- local _UnitIsDead
 
+MODERNIZR.active = false
+IsLoggedIn = function()
+    return MODERNIZR.active
+end
+
 function MODERNIZR:PLAYER_LOGIN()
     _CastSpellByName = CastSpellByName
     _CastPetAction = CastPetAction
@@ -3101,6 +2939,7 @@ function MODERNIZR:PLAYER_LOGIN()
     --     -- print({unit, _UnitIsDead(unit), not isFeignDeath})
     --     return _UnitIsDead(unit) and not isFeignDeath
     -- end
+    MODERNIZR.active = true
 end
 
 local function OnEvent()
